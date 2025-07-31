@@ -336,14 +336,201 @@ def get_videos():
     return jsonify(video_list)
 
 @app.route('/api/videos/<filename>')
-def serve_video(filename):
-    """Serve video files"""
+def serve_recorded_video(filename):
+    """Serve recorded video files"""
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 @app.route('/api/thumbnails/<filename>')
 def serve_thumbnail(filename):
     """Serve thumbnail images"""
     return send_from_directory('static/thumbnails', filename)
+
+@app.route('/api/stream/<int:camera_id>')
+def stream_preview(camera_id):
+    """Stream live preview for a camera"""
+    conn = sqlite3.connect('video_analysis.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM cameras WHERE id = ?', (camera_id,))
+    camera = cursor.fetchone()
+    conn.close()
+    
+    if not camera:
+        return jsonify({'error': 'Camera not found'}), 404
+    
+    # Build RTSP URL
+    rtsp_url = f"rtsp://{camera[4]}:{camera[5]}@{camera[2]}:{camera[3]}{camera[6]}"
+    
+    # Return the RTSP URL for the frontend to handle
+    return jsonify({
+        'camera_id': camera_id,
+        'rtsp_url': rtsp_url,
+        'camera_name': camera[1]
+    })
+
+@app.route('/api/stream/<int:camera_id>/snapshot')
+def camera_snapshot(camera_id):
+    """Get a snapshot from a camera"""
+    conn = sqlite3.connect('video_analysis.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT * FROM cameras WHERE id = ?', (camera_id,))
+    camera = cursor.fetchone()
+    conn.close()
+    
+    if not camera:
+        return jsonify({'error': 'Camera not found'}), 404
+    
+    # Build RTSP URL
+    rtsp_url = f"rtsp://{camera[4]}:{camera[5]}@{camera[2]}:{camera[3]}{camera[6]}"
+    
+    try:
+        # Capture a frame from the RTSP stream
+        cap = cv2.VideoCapture(rtsp_url)
+        if not cap.isOpened():
+            return jsonify({'error': 'Could not connect to camera'}), 500
+        
+        ret, frame = cap.read()
+        cap.release()
+        
+        if not ret:
+            return jsonify({'error': 'Could not capture frame'}), 500
+        
+        # Convert frame to JPEG
+        _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        jpeg_data = buffer.tobytes()
+        
+        # Return the image
+        from flask import Response
+        return Response(jpeg_data, mimetype='image/jpeg')
+        
+    except Exception as e:
+        return jsonify({'error': f'Error capturing snapshot: {str(e)}'}), 500
+
+@app.route('/api/upload-video', methods=['POST'])
+def upload_video():
+    """Upload a video file for processing"""
+    if 'video' not in request.files:
+        return jsonify({'error': 'No video file provided'}), 400
+    
+    file = request.files['video']
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+    
+    if file:
+        # Create uploads directory if it doesn't exist
+        upload_dir = 'static/uploads'
+        if not os.path.exists(upload_dir):
+            os.makedirs(upload_dir)
+        
+        # Generate unique filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"upload_{timestamp}_{secure_filename(file.filename)}"
+        filepath = os.path.join(upload_dir, filename)
+        
+        # Save the file
+        file.save(filepath)
+        
+        # Get video info
+        cap = cv2.VideoCapture(filepath)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration = frame_count / fps if fps > 0 else 0
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        cap.release()
+        
+        return jsonify({
+            'success': True,
+            'filename': filename,
+            'filepath': filepath,
+            'fps': fps,
+            'frame_count': frame_count,
+            'duration': duration,
+            'width': width,
+            'height': height
+        })
+
+@app.route('/api/process-video', methods=['POST'])
+def process_video():
+    """Process a video with depersonalization"""
+    data = request.get_json()
+    filename = data.get('filename')
+    enable_depersonalization = data.get('depersonalize', True)
+    
+    if not filename:
+        return jsonify({'error': 'No filename provided'}), 400
+    
+    filepath = os.path.join('static/uploads', filename)
+    if not os.path.exists(filepath):
+        return jsonify({'error': 'Video file not found'}), 404
+    
+    try:
+        # Create processed videos directory
+        processed_dir = 'static/processed'
+        if not os.path.exists(processed_dir):
+            os.makedirs(processed_dir)
+        
+        # Generate output filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        output_filename = f"processed_{timestamp}_{filename}"
+        output_path = os.path.join(processed_dir, output_filename)
+        
+        # Process the video
+        cap = cv2.VideoCapture(filepath)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        
+        # Create video writer
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+        
+        frame_count = 0
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            
+            if enable_depersonalization:
+                # Apply depersonalization
+                face_locations = detect_faces(frame)
+                plate_boxes = detect_license_plates(frame)
+                frame = depersonalize_frame(frame, face_locations, plate_boxes)
+            
+            out.write(frame)
+            frame_count += 1
+            
+            # Progress update every 10 frames
+            if frame_count % 10 == 0:
+                progress = (frame_count / total_frames) * 100
+                print(f"Processing: {progress:.1f}%")
+        
+        cap.release()
+        out.release()
+        
+        return jsonify({
+            'success': True,
+            'processed_filename': output_filename,
+            'processed_path': output_path,
+            'frame_count': frame_count,
+            'depersonalized': enable_depersonalization
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Error processing video: {str(e)}'}), 500
+
+@app.route('/api/uploaded-video/<filename>')
+def serve_uploaded_video(filename):
+    """Serve uploaded video files"""
+    return send_from_directory('static/uploads', filename)
+
+@app.route('/api/processed-video/<filename>')
+def serve_processed_video(filename):
+    """Serve processed video files"""
+    return send_from_directory('static/processed', filename)
 
 if __name__ == '__main__':
     init_database()
