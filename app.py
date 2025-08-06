@@ -37,39 +37,67 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def init_database():
-    """Initialize SQLite database with tables for camera configuration and video metadata"""
+    """Initialize SQLite database with tables"""
     conn = sqlite3.connect('video_analysis.db')
     cursor = conn.cursor()
     
-    # Camera configuration table
+    # Create cameras table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS cameras (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             ip_address TEXT NOT NULL,
-            port INTEGER DEFAULT 554,
+            port INTEGER NOT NULL,
+            rtsp_path TEXT NOT NULL,
             username TEXT,
             password TEXT,
-            rtsp_path TEXT DEFAULT '/stream1',
             enabled BOOLEAN DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
     
-    # Video metadata table
+    # Create videos table for recorded videos from cameras
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS videos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             filename TEXT NOT NULL,
             camera_id INTEGER,
-            start_time TIMESTAMP,
-            end_time TIMESTAMP,
             duration REAL,
             faces_detected INTEGER DEFAULT 0,
             plates_detected INTEGER DEFAULT 0,
-            depersonalized BOOLEAN DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (camera_id) REFERENCES cameras (id)
+        )
+    ''')
+    
+    # Create uploaded_videos table for user uploaded videos
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS uploaded_videos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            original_filename TEXT NOT NULL,
+            stored_filename TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            duration REAL,
+            fps REAL,
+            frame_count INTEGER,
+            width INTEGER,
+            height INTEGER,
+            file_size INTEGER,
+            uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Create processed_videos table for processed videos
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS processed_videos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uploaded_video_id INTEGER NOT NULL,
+            processed_filename TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            depersonalized BOOLEAN DEFAULT 0,
+            processing_duration REAL,
+            processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (uploaded_video_id) REFERENCES uploaded_videos (id)
         )
     ''')
     
@@ -233,6 +261,11 @@ def index():
     """Main page with video interface"""
     return render_template('index.html')
 
+@app.route('/video-test')
+def video_test():
+    """Render the video test page"""
+    return render_template('video_test.html')
+
 @app.route('/api/cameras', methods=['GET'])
 def get_cameras():
     """Get all configured cameras"""
@@ -335,6 +368,106 @@ def get_videos():
     
     return jsonify(video_list)
 
+@app.route('/api/uploaded-videos', methods=['GET'])
+def get_uploaded_videos():
+    """Get list of uploaded videos with their processed versions"""
+    conn = sqlite3.connect('video_analysis.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT 
+            uv.id,
+            uv.original_filename,
+            uv.stored_filename,
+            uv.duration,
+            uv.fps,
+            uv.frame_count,
+            uv.width,
+            uv.height,
+            uv.file_size,
+            uv.uploaded_at,
+            pv.id as processed_id,
+            pv.processed_filename,
+            pv.depersonalized,
+            pv.processing_duration,
+            pv.processed_at
+        FROM uploaded_videos uv
+        LEFT JOIN processed_videos pv ON uv.id = pv.uploaded_video_id
+        ORDER BY uv.uploaded_at DESC
+    ''')
+    videos = cursor.fetchall()
+    conn.close()
+    
+    video_list = []
+    for video in videos:
+        video_data = {
+            'id': video[0],
+            'original_filename': video[1],
+            'stored_filename': video[2],
+            'duration': video[3],
+            'fps': video[4],
+            'frame_count': video[5],
+            'width': video[6],
+            'height': video[7],
+            'file_size': video[8],
+            'uploaded_at': video[9],
+            'has_processed_version': video[10] is not None
+        }
+        
+        if video[10]:  # If processed version exists
+            video_data['processed'] = {
+                'id': video[10],
+                'filename': video[11],
+                'depersonalized': video[12],
+                'processing_duration': video[13],
+                'processed_at': video[14]
+            }
+        
+        video_list.append(video_data)
+    
+    return jsonify(video_list)
+
+@app.route('/api/uploaded-videos/<int:video_id>', methods=['DELETE'])
+def delete_uploaded_video(video_id):
+    """Delete an uploaded video and its processed versions"""
+    conn = sqlite3.connect('video_analysis.db')
+    cursor = conn.cursor()
+    
+    try:
+        # Get video info
+        cursor.execute('SELECT stored_filename, file_path FROM uploaded_videos WHERE id = ?', (video_id,))
+        video_record = cursor.fetchone()
+        
+        if not video_record:
+            conn.close()
+            return jsonify({'error': 'Video not found'}), 404
+        
+        stored_filename, file_path = video_record
+        
+        # Get processed videos
+        cursor.execute('SELECT processed_filename, file_path FROM processed_videos WHERE uploaded_video_id = ?', (video_id,))
+        processed_videos = cursor.fetchall()
+        
+        # Delete files
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        
+        for processed_filename, processed_file_path in processed_videos:
+            if os.path.exists(processed_file_path):
+                os.remove(processed_file_path)
+        
+        # Delete from database
+        cursor.execute('DELETE FROM processed_videos WHERE uploaded_video_id = ?', (video_id,))
+        cursor.execute('DELETE FROM uploaded_videos WHERE id = ?', (video_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': 'Video deleted successfully'})
+        
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': f'Error deleting video: {str(e)}'}), 500
+
 @app.route('/api/videos/<filename>')
 def serve_recorded_video(filename):
     """Serve recorded video files"""
@@ -425,11 +558,15 @@ def upload_video():
         
         # Generate unique filename
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"upload_{timestamp}_{secure_filename(file.filename)}"
-        filepath = os.path.join(upload_dir, filename)
+        original_filename = secure_filename(file.filename)
+        stored_filename = f"upload_{timestamp}_{original_filename}"
+        filepath = os.path.join(upload_dir, stored_filename)
         
         # Save the file
         file.save(filepath)
+        
+        # Get file size
+        file_size = os.path.getsize(filepath)
         
         # Get video info
         cap = cv2.VideoCapture(filepath)
@@ -440,15 +577,31 @@ def upload_video():
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         cap.release()
         
+        # Save to database
+        conn = sqlite3.connect('video_analysis.db')
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO uploaded_videos 
+            (original_filename, stored_filename, file_path, duration, fps, frame_count, width, height, file_size)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (original_filename, stored_filename, filepath, duration, fps, frame_count, width, height, file_size))
+        
+        video_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
         return jsonify({
             'success': True,
-            'filename': filename,
+            'id': video_id,
+            'original_filename': original_filename,
+            'filename': stored_filename,
             'filepath': filepath,
             'fps': fps,
             'frame_count': frame_count,
             'duration': duration,
             'width': width,
-            'height': height
+            'height': height,
+            'file_size': file_size
         })
 
 @app.route('/api/process-video', methods=['POST'])
@@ -461,8 +614,20 @@ def process_video():
     if not filename:
         return jsonify({'error': 'No filename provided'}), 400
     
-    filepath = os.path.join('static/uploads', filename)
+    # Find the uploaded video in database
+    conn = sqlite3.connect('video_analysis.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, file_path FROM uploaded_videos WHERE stored_filename = ?', (filename,))
+    video_record = cursor.fetchone()
+    
+    if not video_record:
+        conn.close()
+        return jsonify({'error': 'Video not found in database'}), 404
+    
+    uploaded_video_id, filepath = video_record
+    
     if not os.path.exists(filepath):
+        conn.close()
         return jsonify({'error': 'Video file not found'}), 404
     
     try:
@@ -477,13 +642,14 @@ def process_video():
         output_path = os.path.join(processed_dir, output_filename)
         
         # Process the video
+        start_time = time.time()
         cap = cv2.VideoCapture(filepath)
         fps = cap.get(cv2.CAP_PROP_FPS)
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         
-        # Create video writer
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        # Create video writer with H.264 codec for better browser compatibility
+        fourcc = cv2.VideoWriter_fourcc(*'avc1')  # H.264 codec
         out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
         
         frame_count = 0
@@ -511,26 +677,75 @@ def process_video():
         cap.release()
         out.release()
         
+        # Ensure video compatibility using FFmpeg if available
+        try:
+            import subprocess
+            # Convert to H.264 with web-compatible settings
+            temp_output = output_path.replace('.mp4', '_temp.mp4')
+            os.rename(output_path, temp_output)
+            
+            ffmpeg_cmd = [
+                'ffmpeg', '-i', temp_output,
+                '-c:v', 'libx264',
+                '-preset', 'fast',
+                '-crf', '23',
+                '-c:a', 'aac',
+                '-movflags', '+faststart',
+                '-y', output_path
+            ]
+            
+            subprocess.run(ffmpeg_cmd, check=True, capture_output=True)
+            os.remove(temp_output)
+            print(f"Video converted to web-compatible format: {output_path}")
+        except (subprocess.CalledProcessError, FileNotFoundError, ImportError) as e:
+            print(f"FFmpeg conversion failed, using original video: {e}")
+            # If FFmpeg fails, rename temp file back
+            if os.path.exists(temp_output):
+                os.rename(temp_output, output_path)
+        
+        # Calculate processing duration
+        processing_duration = time.time() - start_time
+        
+        # Save processed video info to database
+        cursor.execute('''
+            INSERT INTO processed_videos 
+            (uploaded_video_id, processed_filename, file_path, depersonalized, processing_duration)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (uploaded_video_id, output_filename, output_path, enable_depersonalization, processing_duration))
+        
+        processed_video_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
         return jsonify({
             'success': True,
+            'processed_video_id': processed_video_id,
             'processed_filename': output_filename,
             'processed_path': output_path,
             'frame_count': frame_count,
-            'depersonalized': enable_depersonalization
+            'depersonalized': enable_depersonalization,
+            'processing_duration': processing_duration
         })
         
     except Exception as e:
+        conn.close()
         return jsonify({'error': f'Error processing video: {str(e)}'}), 500
 
 @app.route('/api/uploaded-video/<filename>')
 def serve_uploaded_video(filename):
     """Serve uploaded video files"""
-    return send_from_directory('static/uploads', filename)
+    response = send_from_directory('static/uploads', filename)
+    response.headers['Content-Type'] = 'video/mp4'
+    response.headers['Accept-Ranges'] = 'bytes'
+    return response
 
 @app.route('/api/processed-video/<filename>')
 def serve_processed_video(filename):
     """Serve processed video files"""
-    return send_from_directory('static/processed', filename)
+    response = send_from_directory('static/processed', filename)
+    response.headers['Content-Type'] = 'video/mp4'
+    response.headers['Accept-Ranges'] = 'bytes'
+    return response
 
 if __name__ == '__main__':
     init_database()

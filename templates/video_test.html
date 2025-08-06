@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Test Page</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .video-container { margin: 20px 0; }
+        video { max-width: 100%; border: 1px solid #ccc; }
+        .error { color: red; }
+        .success { color: green; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>Video Playback Test</h1>
+    
+    <div class="video-container">
+        <h2>Original Video</h2>
+        <video id="originalVideo" controls>
+            <source src="/api/uploaded-video/upload_20250804_154635_test_video.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+        <div id="originalStatus"></div>
+    </div>
+    
+    <div class="video-container">
+        <h2>Processed Video</h2>
+        <video id="processedVideo" controls>
+            <source src="/api/processed-video/processed_20250804_155926_upload_20250804_154635_test_video.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+        <div id="processedStatus"></div>
+    </div>
+    
+    <div class="video-container">
+        <h2>Direct File Test</h2>
+        <video id="directVideo" controls>
+            <source src="/static/processed/processed_20250804_155926_upload_20250804_154635_test_video.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+        <div id="directStatus"></div>
+    </div>
+    
+    <script>
+        function testVideo(videoId, statusId, videoName) {
+            const video = document.getElementById(videoId);
+            const status = document.getElementById(statusId);
+            
+            video.addEventListener('loadstart', () => {
+                status.innerHTML = `<span class="info">Loading ${videoName}...</span>`;
+            });
+            
+            video.addEventListener('loadeddata', () => {
+                status.innerHTML = `<span class="success">${videoName} loaded successfully!</span>`;
+            });
+            
+            video.addEventListener('error', (e) => {
+                status.innerHTML = `<span class="error">Error loading ${videoName}: ${e.message}</span>`;
+                console.error(`Error with ${videoName}:`, e);
+            });
+            
+            video.addEventListener('canplay', () => {
+                status.innerHTML = `<span class="success">${videoName} can play!</span>`;
+            });
+        }
+        
+        // Test all videos
+        testVideo('originalVideo', 'originalStatus', 'Original Video');
+        testVideo('processedVideo', 'processedStatus', 'Processed Video');
+        testVideo('directVideo', 'directStatus', 'Direct File Video');
+    </script>
+</body>
+</html> 

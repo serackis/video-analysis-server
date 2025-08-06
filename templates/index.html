@@ -4,11 +4,51 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video Analysis Server</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Bootstrap CSS with fallback -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" onerror="this.onerror=null; this.href='https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/css/bootstrap.min.css';">
+    
+    <!-- Font Awesome with fallback -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" onerror="this.onerror=null; this.href='https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css';">
+    
+    <!-- Local CSS -->
     <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+    
+    <!-- Fallback styles if external resources fail -->
+    <style>
+        /* Basic fallback styles if Bootstrap fails to load */
+        .fallback-container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .fallback-card { border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 20px; background: #fff; }
+        .fallback-btn { 
+            background: #007bff; color: white; border: none; padding: 10px 20px; 
+            border-radius: 4px; cursor: pointer; margin: 5px;
+        }
+        .fallback-btn:hover { background: #0056b3; }
+        .fallback-input { 
+            width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; 
+            margin-bottom: 10px; box-sizing: border-box;
+        }
+        .fallback-nav { background: #333; color: white; padding: 15px; }
+        .fallback-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        
+        /* Hide fallback elements when Bootstrap is loaded */
+        .bootstrap-loaded .fallback-container,
+        .bootstrap-loaded .fallback-card,
+        .bootstrap-loaded .fallback-btn,
+        .bootstrap-loaded .fallback-input,
+        .bootstrap-loaded .fallback-nav,
+        .bootstrap-loaded .fallback-grid { display: none; }
+    </style>
 </head>
 <body>
+    <!-- Fallback Navigation -->
+    <div class="fallback-nav">
+        <div class="fallback-container">
+            <h2>Video Analysis Server</h2>
+        </div>
+    </div>
+
+    <!-- Bootstrap Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container">
             <a class="navbar-brand" href="#">
@@ -18,6 +58,7 @@
         </div>
     </nav>
 
+    <!-- Bootstrap Container -->
     <div class="container mt-4">
         <div class="row">
             <!-- Camera Configuration Panel -->
@@ -84,99 +125,17 @@
                     </div>
                 </div>
 
-                <!-- Video Upload and Processing Panel -->
-                <div class="card mt-4">
-                    <div class="card-header">
-                        <h6 class="mb-0">
-                            <i class="fas fa-upload me-2"></i>
-                            Video Upload & Processing
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="upload-section">
-                                    <h6>Upload Video</h6>
-                                    <form id="videoUploadForm" enctype="multipart/form-data">
-                                        <div class="mb-3">
-                                            <label for="videoFile" class="form-label">Select Video File</label>
-                                            <input type="file" class="form-control" id="videoFile" name="video" accept="video/*" required>
-                                            <div class="form-text">Supported formats: MP4, AVI, MOV, MKV</div>
-                                        </div>
-                                        <button type="submit" class="btn btn-primary">
-                                            <i class="fas fa-upload me-2"></i>Upload Video
-                                        </button>
-                                    </form>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="processing-section">
-                                    <h6>Video Processing</h6>
-                                    <div id="videoInfo" style="display: none;">
-                                        <div class="video-details mb-3">
-                                            <h6>Video Details</h6>
-                                            <div id="videoDetails"></div>
-                                        </div>
-                                        <div class="processing-controls">
-                                            <div class="form-check mb-3">
-                                                <input class="form-check-input" type="checkbox" id="enableDepersonalization" checked>
-                                                <label class="form-check-label" for="enableDepersonalization">
-                                                    Enable Depersonalization
-                                                </label>
-                                            </div>
-                                            <button id="processVideoBtn" class="btn btn-success">
-                                                <i class="fas fa-cogs me-2"></i>Process Video
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Processing Progress -->
-                        <div id="processingProgress" style="display: none;" class="mt-4">
-                            <h6>Processing Progress</h6>
-                            <div class="progress mb-3">
-                                <div class="progress-bar" role="progressbar" style="width: 0%"></div>
-                            </div>
-                            <div id="processingStatus" class="text-muted"></div>
-                        </div>
-                        
-                        <!-- Video Player -->
-                        <div id="videoPlayerSection" style="display: none;" class="mt-4">
-                            <h6>Video Player</h6>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <h6>Original Video</h6>
-                                    <video id="originalVideo" controls class="w-100">
-                                        Your browser does not support the video tag.
-                                    </video>
-                                </div>
-                                <div class="col-md-6">
-                                    <h6>Processed Video</h6>
-                                    <video id="processedVideo" controls class="w-100">
-                                        Your browser does not support the video tag.
-                                    </video>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Camera Preview Panel -->
+                <!-- Video Library Panel -->
                 <div class="card mt-4">
                     <div class="card-header">
                         <h6 class="mb-0">
                             <i class="fas fa-video me-2"></i>
-                            Live Camera Preview
+                            Video Library
                         </h6>
                     </div>
                     <div class="card-body">
-                        <div id="cameraPreview">
-                            <div class="text-center text-muted">
-                                <i class="fas fa-video fa-3x mb-3"></i>
-                                <p>Select a camera to view live preview</p>
-                            </div>
+                        <div class="row" id="uploadedVideosGrid">
+                            <!-- Uploaded videos will be loaded here -->
                         </div>
                     </div>
                 </div>
@@ -196,6 +155,119 @@
                             <!-- Videos will be loaded here -->
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Video Upload and Processing Panel -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cloud-upload-alt me-2"></i>
+                        Video Upload & Processing
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="upload-section">
+                                <h6>Upload Video</h6>
+                                <form id="videoUploadForm" enctype="multipart/form-data">
+                                    <div class="mb-3">
+                                        <label for="videoFile" class="form-label">Select Video File</label>
+                                        <input type="file" class="form-control" id="videoFile" name="video" accept="video/*" required>
+                                        <div class="form-text">Supported formats: MP4, AVI, MOV, MKV</div>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-upload me-2"></i>Upload Video
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="processing-section">
+                                <h6>Video Processing</h6>
+                                <div id="videoInfo" style="display: none;">
+                                    <div class="video-details mb-3">
+                                        <h6>Video Details</h6>
+                                        <div id="videoDetails"></div>
+                                    </div>
+                                    <div class="processing-controls">
+                                        <div class="form-check mb-3">
+                                            <input class="form-check-input" type="checkbox" id="enableDepersonalization" checked>
+                                            <label class="form-check-label" for="enableDepersonalization">
+                                                Enable Depersonalization
+                                            </label>
+                                        </div>
+                                        <button id="processVideoBtn" class="btn btn-success">
+                                            <i class="fas fa-cogs me-2"></i>Process Video
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Processing Progress -->
+                    <div id="processingProgress" style="display: none;" class="mt-4">
+                        <h6>Processing Progress</h6>
+                        <div class="progress mb-3">
+                            <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                        </div>
+                        <div id="processingStatus" class="text-muted"></div>
+                    </div>
+                    
+                    <!-- Video Player -->
+                    <div id="videoPlayerSection" style="display: none;" class="mt-4">
+                        <h6>Video Player</h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Original Video</h6>
+                                <video id="originalVideo" controls class="w-100">
+                                    Your browser does not support the video tag.
+                                </video>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Processed Video</h6>
+                                <video id="processedVideo" controls class="w-100">
+                                    Your browser does not support the video tag.
+                                </video>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fallback Container -->
+    <div class="fallback-container">
+        <div class="fallback-grid">
+            <div class="fallback-card">
+                <h3>Camera Configuration</h3>
+                <input type="text" class="fallback-input" placeholder="Camera Name" id="fallbackCameraName">
+                <input type="text" class="fallback-input" placeholder="IP Address" id="fallbackIpAddress">
+                <input type="number" class="fallback-input" placeholder="Port" id="fallbackPort" value="554">
+                <input type="text" class="fallback-input" placeholder="RTSP Path" id="fallbackRtspPath" value="/stream1">
+                <input type="text" class="fallback-input" placeholder="Username" id="fallbackUsername">
+                <input type="password" class="fallback-input" placeholder="Password" id="fallbackPassword">
+                <button class="fallback-btn" onclick="addCameraFallback()">Add Camera</button>
+            </div>
+            
+            <div class="fallback-card">
+                <h3>Video Upload</h3>
+                <input type="file" class="fallback-input" id="fallbackVideoFile" accept="video/*">
+                <button class="fallback-btn" onclick="uploadVideoFallback()">Upload Video</button>
+                <div id="fallbackVideoInfo"></div>
+            </div>
+            
+            <div class="fallback-card">
+                <h3>Video Library</h3>
+                <div id="fallbackVideoLibrary">
+                    <p>No videos uploaded yet</p>
                 </div>
             </div>
         </div>
@@ -276,7 +348,151 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Bootstrap JS with fallback -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js" onerror="this.onerror=null; this.src='https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.1.3/js/bootstrap.bundle.min.js';"></script>
+    
+    <!-- Local JavaScript -->
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    
+    <!-- Fallback JavaScript -->
+    <script>
+        // Check if Bootstrap loaded successfully
+        window.addEventListener('load', function() {
+            if (typeof bootstrap !== 'undefined') {
+                document.body.classList.add('bootstrap-loaded');
+            }
+        });
+
+        // Fallback functions for when Bootstrap fails
+        function addCameraFallback() {
+            const name = document.getElementById('fallbackCameraName').value;
+            const ip = document.getElementById('fallbackIpAddress').value;
+            const port = document.getElementById('fallbackPort').value;
+            const rtspPath = document.getElementById('fallbackRtspPath').value;
+            const username = document.getElementById('fallbackUsername').value;
+            const password = document.getElementById('fallbackPassword').value;
+            
+            if (!name || !ip) {
+                alert('Please fill in camera name and IP address');
+                return;
+            }
+            
+            fetch('/api/cameras', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: name,
+                    ip_address: ip,
+                    port: parseInt(port) || 554,
+                    rtsp_path: rtspPath,
+                    username: username,
+                    password: password
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Camera added successfully!');
+                    location.reload();
+                } else {
+                    alert('Failed to add camera');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error adding camera');
+            });
+        }
+
+        function uploadVideoFallback() {
+            const fileInput = document.getElementById('fallbackVideoFile');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a video file');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('video', file);
+            
+            fetch('/api/upload-video', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('fallbackVideoInfo').innerHTML = `
+                        <p><strong>Uploaded:</strong> ${data.original_filename}</p>
+                        <p><strong>Duration:</strong> ${data.duration.toFixed(2)}s</p>
+                        <p><strong>Size:</strong> ${(data.file_size / 1024 / 1024).toFixed(2)} MB</p>
+                    `;
+                    alert('Video uploaded successfully!');
+                } else {
+                    alert('Upload failed');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error uploading video');
+            });
+        }
+
+        // Load uploaded videos in fallback mode
+        function loadFallbackVideos() {
+            fetch('/api/uploaded-videos')
+            .then(response => response.json())
+            .then(videos => {
+                const library = document.getElementById('fallbackVideoLibrary');
+                if (videos.length === 0) {
+                    library.innerHTML = '<p>No videos uploaded yet</p>';
+                } else {
+                    library.innerHTML = videos.map(video => `
+                        <div style="border: 1px solid #ddd; padding: 10px; margin: 10px 0; border-radius: 4px;">
+                            <h4>${video.original_filename}</h4>
+                            <p>Duration: ${video.duration.toFixed(2)}s</p>
+                            <p>Size: ${(video.file_size / 1024 / 1024).toFixed(2)} MB</p>
+                            <button class="fallback-btn" onclick="playVideoFallback('${video.stored_filename}')">Play</button>
+                            <button class="fallback-btn" onclick="deleteVideoFallback(${video.id})">Delete</button>
+                        </div>
+                    `).join('');
+                }
+            })
+            .catch(error => {
+                console.error('Error loading videos:', error);
+            });
+        }
+
+        function playVideoFallback(filename) {
+            window.open(`/api/uploaded-video/${filename}`, '_blank');
+        }
+
+        function deleteVideoFallback(videoId) {
+            if (confirm('Are you sure you want to delete this video?')) {
+                fetch(`/api/uploaded-videos/${videoId}`, {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Video deleted successfully!');
+                        loadFallbackVideos();
+                    } else {
+                        alert('Failed to delete video');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error deleting video');
+                });
+            }
+        }
+
+        // Load fallback videos on page load
+        window.addEventListener('load', function() {
+            setTimeout(loadFallbackVideos, 1000);
+        });
+    </script>
 </body>
 </html> 

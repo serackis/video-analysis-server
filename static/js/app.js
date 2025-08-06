@@ -4,13 +4,20 @@ class VideoAnalysisApp {
     constructor() {
         this.cameras = [];
         this.videos = [];
+        this.uploadedVideos = [];
+        this.currentVideo = null;
+        this.isBootstrapLoaded = false;
+        this.retryCount = 0;
+        this.maxRetries = 3;
         this.init();
     }
 
     init() {
+        this.checkBootstrapLoaded();
         this.bindEvents();
         this.loadCameras();
         this.loadVideos();
+        this.loadUploadedVideos();
         this.startAutoRefresh();
         this.initVideoUpload();
         
@@ -18,6 +25,43 @@ class VideoAnalysisApp {
         setTimeout(() => {
             this.updateCameraPreviews();
         }, 2000);
+    }
+
+    checkBootstrapLoaded() {
+        // Check if Bootstrap is loaded
+        if (typeof bootstrap !== 'undefined') {
+            this.isBootstrapLoaded = true;
+            document.body.classList.add('bootstrap-loaded');
+        } else {
+            console.warn('Bootstrap not loaded, using fallback mode');
+            this.isBootstrapLoaded = false;
+        }
+    }
+
+    handleApiError(resource, error) {
+        console.error(`Error loading ${resource}:`, error);
+        
+        if (this.retryCount < this.maxRetries) {
+            this.retryCount++;
+            console.log(`Retrying ${resource} (attempt ${this.retryCount}/${this.maxRetries})...`);
+            
+            setTimeout(() => {
+                switch(resource) {
+                    case 'cameras':
+                        this.loadCameras();
+                        break;
+                    case 'videos':
+                        this.loadVideos();
+                        break;
+                    case 'uploaded-videos':
+                        this.loadUploadedVideos();
+                        break;
+                }
+            }, 1000 * this.retryCount); // Exponential backoff
+        } else {
+            this.showNotification(`Failed to load ${resource} after ${this.maxRetries} attempts`, 'error');
+            this.retryCount = 0; // Reset for next time
+        }
     }
 
     bindEvents() {
@@ -39,22 +83,44 @@ class VideoAnalysisApp {
     async loadCameras() {
         try {
             const response = await fetch('/api/cameras');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
             this.cameras = await response.json();
             this.renderCameras();
+            this.retryCount = 0; // Reset retry count on success
         } catch (error) {
             console.error('Error loading cameras:', error);
-            this.showNotification('Error loading cameras', 'error');
+            this.handleApiError('cameras', error);
         }
     }
 
     async loadVideos() {
         try {
             const response = await fetch('/api/videos');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
             this.videos = await response.json();
             this.renderVideos();
         } catch (error) {
             console.error('Error loading videos:', error);
-            this.showNotification('Error loading videos', 'error');
+            this.handleApiError('videos', error);
+        }
+    }
+
+    async loadUploadedVideos() {
+        try {
+            const response = await fetch('/api/uploaded-videos');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            const videos = await response.json();
+            this.uploadedVideos = videos;
+            this.renderUploadedVideos();
+        } catch (error) {
+            console.error('Error loading uploaded videos:', error);
+            this.handleApiError('uploaded-videos', error);
         }
     }
 
@@ -357,6 +423,7 @@ class VideoAnalysisApp {
         
         const videoInfo = document.getElementById('videoInfo');
         const videoDetails = document.getElementById('videoDetails');
+        const fileInput = document.getElementById('videoFile');
         
         videoDetails.innerHTML = `
             <div class="row">
@@ -367,8 +434,8 @@ class VideoAnalysisApp {
                 </div>
                 <div class="col-6">
                     <strong>Resolution:</strong> ${videoData.width}x${videoData.height}<br>
-                    <strong>File:</strong> ${videoData.filename}<br>
-                    <strong>Size:</strong> ${(fileInput.files[0].size / 1024 / 1024).toFixed(2)} MB
+                    <strong>File:</strong> ${videoData.original_filename}<br>
+                    <strong>Size:</strong> ${(videoData.file_size / 1024 / 1024).toFixed(2)} MB
                 </div>
             </div>
         `;
@@ -495,6 +562,52 @@ class VideoAnalysisApp {
         `).join('');
     }
 
+    renderUploadedVideos() {
+        const videosGrid = document.getElementById('uploadedVideosGrid');
+        
+        if (!this.uploadedVideos || this.uploadedVideos.length === 0) {
+            videosGrid.innerHTML = '<div class="col-12"><p class="text-muted text-center">No uploaded videos yet</p></div>';
+            return;
+        }
+
+        videosGrid.innerHTML = this.uploadedVideos.map(video => `
+            <div class="col-md-6 col-lg-4 mb-3">
+                <div class="video-card">
+                    <div class="video-thumbnail">
+                        <i class="fas fa-video"></i>
+                        ${video.has_processed_version ? '<div class="processed-badge"><i class="fas fa-check-circle"></i></div>' : ''}
+                    </div>
+                    <div class="video-info">
+                        <h6 class="video-title">${video.original_filename}</h6>
+                        <p class="video-duration">Duration: ${this.formatDuration(video.duration)}</p>
+                        <p class="video-date">${this.formatDate(video.uploaded_at)}</p>
+                        <p class="video-resolution">${video.width}x${video.height} @ ${video.fps.toFixed(1)}fps</p>
+                        <p class="video-size">${(video.file_size / 1024 / 1024).toFixed(2)} MB</p>
+                        ${video.has_processed_version ? `
+                            <div class="processed-info">
+                                <span class="badge bg-success">Processed</span>
+                                ${video.processed.depersonalized ? '<span class="badge bg-warning">Depersonalized</span>' : ''}
+                            </div>
+                        ` : ''}
+                    </div>
+                    <div class="video-actions">
+                        <button class="btn btn-primary btn-sm" onclick="app.playUploadedVideo('${video.stored_filename}')">
+                            <i class="fas fa-play"></i> Play Original
+                        </button>
+                        ${video.has_processed_version ? `
+                            <button class="btn btn-success btn-sm" onclick="app.playProcessedVideo('${video.processed.filename}')">
+                                <i class="fas fa-eye"></i> Play Processed
+                            </button>
+                        ` : ''}
+                        <button class="btn btn-danger btn-sm" onclick="app.deleteUploadedVideo(${video.id})">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
     playVideo(filename) {
         const videoPlayer = document.getElementById('videoPlayer');
         videoPlayer.src = `/api/videos/${filename}`;
@@ -510,6 +623,46 @@ class VideoAnalysisApp {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    }
+
+    playUploadedVideo(filename) {
+        const videoPlayer = document.getElementById('videoPlayer');
+        videoPlayer.src = `/api/uploaded-video/${filename}`;
+        
+        const videoModal = new bootstrap.Modal(document.getElementById('videoModal'));
+        videoModal.show();
+    }
+
+    playProcessedVideo(filename) {
+        const videoPlayer = document.getElementById('videoPlayer');
+        videoPlayer.src = `/api/processed-video/${filename}`;
+        
+        const videoModal = new bootstrap.Modal(document.getElementById('videoModal'));
+        videoModal.show();
+    }
+
+    async deleteUploadedVideo(videoId) {
+        if (!confirm('Are you sure you want to delete this video? This action cannot be undone.')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/uploaded-videos/${videoId}`, {
+                method: 'DELETE'
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                this.showNotification('Video deleted successfully!', 'success');
+                await this.loadUploadedVideos();
+            } else {
+                this.showNotification('Failed to delete video', 'error');
+            }
+        } catch (error) {
+            console.error('Error deleting video:', error);
+            this.showNotification('Error deleting video', 'error');
+        }
     }
 
     formatDuration(seconds) {
