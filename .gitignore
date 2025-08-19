@@ -28,6 +28,13 @@ ENV/
 env.bak/
 venv.bak/
 
+# Python cache and compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
 # Flask
 instance/
 .webassets-cache
@@ -57,10 +64,8 @@ static/thumbnails/
 *.mts
 *.m2ts
 
-# Exceptions: Keep important sample/test videos
-!sample_video.mp4
-!test_video.mp4
-!test_upload_video.mp4
+# Exceptions: Keep important sample/test videos (REMOVED - no sample videos needed)
+# All video files are now completely ignored
 
 # Video processing files
 *.mp4.tmp
