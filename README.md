@@ -81,6 +81,15 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+4. **Get sample videos for testing (optional)**
+```bash
+# Download a small sample video for testing
+curl -o sample_video.mp4 "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4"
+
+# Or use any MP4 file you have locally
+# Copy it to the project root and rename it to sample_video.mp4
+```
+
 ## Usage
 
 ### Starting the Server
