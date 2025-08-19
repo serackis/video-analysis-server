@@ -57,6 +57,11 @@ static/thumbnails/
 *.mts
 *.m2ts
 
+# Exceptions: Keep important sample/test videos
+!sample_video.mp4
+!test_video.mp4
+!test_upload_video.mp4
+
 # Video processing files
 *.mp4.tmp
 *.avi.tmp
@@ -69,12 +74,36 @@ uploads/
 **/uploaded_videos/
 **/processed_videos/
 
+# Specific upload patterns
+static/uploads/
+static/processed/
+static/thumbnails/
+static/videos/
+
+# Ignore all uploaded videos with timestamp patterns
+static/uploads/upload_*
+static/processed/processed_*
+
 # Video thumbnails and metadata
 *.jpg
 *.jpeg
 *.png
 !sample_*.jpg
 !test_*.jpg
+
+# Video metadata and temporary files
+*.mp4.metadata
+*.avi.metadata
+*.mov.metadata
+*.mkv.metadata
+*.mp4.tmp
+*.avi.tmp
+*.mov.tmp
+*.mkv.tmp
+*.mp4.part
+*.avi.part
+*.mov.part
+*.mkv.part
 
 # Logs
 logs/
