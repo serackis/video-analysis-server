@@ -266,6 +266,21 @@ def video_test():
     """Render the video test page"""
     return render_template('video_test.html')
 
+@app.route('/cameras')
+def cameras():
+    """Camera configuration page"""
+    return render_template('cameras.html')
+
+@app.route('/upload')
+def upload():
+    """Video upload and processing page"""
+    return render_template('upload.html')
+
+@app.route('/library')
+def library():
+    """Video library page"""
+    return render_template('library.html')
+
 @app.route('/api/cameras', methods=['GET'])
 def get_cameras():
     """Get all configured cameras"""
@@ -425,6 +440,83 @@ def get_uploaded_videos():
         video_list.append(video_data)
     
     return jsonify(video_list)
+
+@app.route('/api/processed-videos', methods=['GET'])
+def get_processed_videos():
+    """Get list of processed videos"""
+    conn = sqlite3.connect('video_analysis.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT 
+            pv.id,
+            pv.processed_filename,
+            pv.depersonalized,
+            pv.processing_duration,
+            pv.processed_at,
+            uv.original_filename,
+            uv.duration,
+            uv.fps,
+            uv.frame_count,
+            uv.width,
+            uv.height,
+            uv.file_size
+        FROM processed_videos pv
+        JOIN uploaded_videos uv ON pv.uploaded_video_id = uv.id
+        ORDER BY pv.processed_at DESC
+    ''')
+    videos = cursor.fetchall()
+    conn.close()
+    
+    video_list = []
+    for video in videos:
+        video_list.append({
+            'id': video[0],
+            'filename': video[1],
+            'depersonalized': bool(video[2]),
+            'processing_duration': video[3],
+            'processed_at': video[4],
+            'original_filename': video[5],
+            'duration': video[6],
+            'fps': video[7],
+            'frame_count': video[8],
+            'width': video[9],
+            'height': video[10],
+            'file_size': video[11]
+        })
+    
+    return jsonify(video_list)
+
+@app.route('/api/processed-videos/<int:video_id>', methods=['DELETE'])
+def delete_processed_video(video_id):
+    """Delete a processed video"""
+    conn = sqlite3.connect('video_analysis.db')
+    cursor = conn.cursor()
+    
+    try:
+        # Get video info
+        cursor.execute('SELECT file_path FROM processed_videos WHERE id = ?', (video_id,))
+        video_record = cursor.fetchone()
+        
+        if not video_record:
+            conn.close()
+            return jsonify({'error': 'Video not found'}), 404
+        
+        file_path = video_record[0]
+        
+        # Delete file
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        
+        # Delete database record
+        cursor.execute('DELETE FROM processed_videos WHERE id = ?', (video_id,))
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        conn.close()
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/uploaded-videos/<int:video_id>', methods=['DELETE'])
 def delete_uploaded_video(video_id):
@@ -749,4 +841,4 @@ def serve_processed_video(filename):
 
 if __name__ == '__main__':
     init_database()
-    app.run(debug=True, host='0.0.0.0', port=5000) 
+    app.run(debug=True, host='0.0.0.0', port=5002) 
