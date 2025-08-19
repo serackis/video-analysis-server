@@ -5,6 +5,63 @@ body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
+/* Video Modal Accessibility Fixes */
+#videoModal {
+    /* Ensure proper focus management */
+    outline: none;
+}
+
+#videoModal .modal-content {
+    /* Prevent focus issues */
+    outline: none;
+}
+
+#videoModal .btn-close {
+    /* Ensure close button is properly accessible */
+    position: relative;
+    z-index: 1;
+}
+
+#videoModal .btn-close:focus {
+    /* Clear focus outline for better accessibility */
+    outline: 2px solid #667eea;
+    outline-offset: 2px;
+}
+
+#videoPlayer {
+    /* Ensure video player is accessible */
+    outline: none;
+}
+
+#videoPlayer:focus {
+    /* Show focus indicator for video player */
+    outline: 2px solid #667eea;
+    outline-offset: 2px;
+}
+
+/* Inert attribute support for better accessibility */
+#videoModal[inert] {
+    /* When inert is set, prevent all interactions */
+    pointer-events: none;
+}
+
+#videoModal[inert] * {
+    /* Ensure all child elements are also inert */
+    pointer-events: none;
+}
+
+/* Focus trap for modal */
+#videoModal:not([inert]) .modal-content {
+    /* Ensure focus stays within modal when active */
+    outline: none;
+}
+
+/* Ensure video player is focusable when modal is active */
+#videoModal:not([inert]) #videoPlayer {
+    /* Make video player focusable */
+    tabindex: "0";
+}
+
 .navbar-brand {
     font-weight: 600;
     font-size: 1.5rem;

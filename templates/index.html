@@ -125,24 +125,13 @@
                     </div>
                 </div>
 
-                <!-- Video Library Panel -->
-                <div class="card mt-4">
-                    <div class="card-header">
-                        <h6 class="mb-0">
-                            <i class="fas fa-video me-2"></i>
-                            Video Library
-                        </h6>
-                    </div>
-                    <div class="card-body">
-                        <div class="row" id="uploadedVideosGrid">
-                            <!-- Uploaded videos will be loaded here -->
-                        </div>
-                    </div>
-                </div>
+                <!-- Video Library Panel - Moved to right side -->
             </div>
 
             <!-- Video Display and Management -->
             <div class="col-lg-8">
+                <!-- Recorded Videos Section - Commented out for now since no videos are shown -->
+                <!--
                 <div class="card">
                     <div class="card-header">
                         <h5 class="mb-0">
@@ -152,7 +141,23 @@
                     </div>
                     <div class="card-body">
                         <div class="row" id="videosGrid">
-                            <!-- Videos will be loaded here -->
+                            Videos will be loaded here
+                        </div>
+                    </div>
+                </div>
+                -->
+                
+                <!-- Video Library Panel - Moved from left side -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-video me-2"></i>
+                            Video Library
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row" id="uploadedVideosGrid">
+                            <!-- Uploaded videos will be loaded here -->
                         </div>
                     </div>
                 </div>
@@ -274,15 +279,15 @@
     </div>
 
     <!-- Video Modal -->
-    <div class="modal fade" id="videoModal" tabindex="-1">
+    <div class="modal fade" id="videoModal" tabindex="-1" aria-labelledby="videoModalLabel">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Video Player</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <h5 class="modal-title" id="videoModalLabel">Video Player</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close video player"></button>
                 </div>
                 <div class="modal-body">
-                    <video id="videoPlayer" controls class="w-100">
+                    <video id="videoPlayer" controls class="w-100" preload="metadata">
                         Your browser does not support the video tag.
                     </video>
                 </div>
@@ -291,12 +296,12 @@
     </div>
 
     <!-- Camera Preview Modal -->
-    <div class="modal fade" id="cameraPreviewModal" tabindex="-1">
+    <div class="modal fade" id="cameraPreviewModal" tabindex="-1" aria-labelledby="cameraPreviewModalLabel">
         <div class="modal-dialog modal-xl">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Live Camera Preview</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <h5 class="modal-title" id="cameraPreviewModalLabel">Live Camera Preview</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close camera preview"></button>
                 </div>
                 <div class="modal-body">
                     <div class="row">

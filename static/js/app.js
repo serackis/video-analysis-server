@@ -16,7 +16,10 @@ class VideoAnalysisApp {
         this.checkBootstrapLoaded();
         this.bindEvents();
         this.loadCameras();
-        this.loadVideos();
+        // Only load videos if the videosGrid element exists
+        if (document.getElementById('videosGrid')) {
+            this.loadVideos();
+        }
         this.loadUploadedVideos();
         this.startAutoRefresh();
         this.initVideoUpload();
@@ -51,7 +54,10 @@ class VideoAnalysisApp {
                         this.loadCameras();
                         break;
                     case 'videos':
-                        this.loadVideos();
+                        // Only retry loading videos if the videosGrid element exists
+                        if (document.getElementById('videosGrid')) {
+                            this.loadVideos();
+                        }
                         break;
                     case 'uploaded-videos':
                         this.loadUploadedVideos();
@@ -73,10 +79,47 @@ class VideoAnalysisApp {
 
         // Video modal events
         const videoModal = document.getElementById('videoModal');
+        
+        // Store the element that had focus before modal opened
+        let previousActiveElement = null;
+        
+        videoModal.addEventListener('show.bs.modal', () => {
+            // Store the currently focused element
+            previousActiveElement = document.activeElement;
+            
+            // Remove any aria-hidden attributes that Bootstrap might add
+            videoModal.removeAttribute('aria-hidden');
+            
+            // Use inert attribute instead of aria-hidden for better accessibility
+            videoModal.removeAttribute('inert');
+        });
+        
+        videoModal.addEventListener('shown.bs.modal', () => {
+            // Focus the video player when modal is fully shown
+            const videoPlayer = document.getElementById('videoPlayer');
+            if (videoPlayer) {
+                videoPlayer.focus();
+            }
+        });
+        
+        videoModal.addEventListener('hide.bs.modal', () => {
+            // Use inert attribute to prevent focus while hiding
+            videoModal.setAttribute('inert', '');
+        });
+        
         videoModal.addEventListener('hidden.bs.modal', () => {
             const videoPlayer = document.getElementById('videoPlayer');
             videoPlayer.pause();
             videoPlayer.src = '';
+            videoPlayer.currentTime = 0;
+            
+            // Remove inert attribute
+            videoModal.removeAttribute('inert');
+            
+            // Restore focus to the previous element
+            if (previousActiveElement && previousActiveElement.focus) {
+                previousActiveElement.focus();
+            }
         });
     }
 
@@ -507,6 +550,12 @@ class VideoAnalysisApp {
     renderVideos() {
         const videosGrid = document.getElementById('videosGrid');
         
+        // Check if the videosGrid element exists (it might be commented out in HTML)
+        if (!videosGrid) {
+            console.log('Videos grid element not found - Recorded Videos section may be commented out');
+            return;
+        }
+        
         if (this.videos.length === 0) {
             videosGrid.innerHTML = '<div class="col-12"><p class="text-muted text-center">No videos recorded yet</p></div>';
             return;
@@ -564,6 +613,12 @@ class VideoAnalysisApp {
 
     renderUploadedVideos() {
         const videosGrid = document.getElementById('uploadedVideosGrid');
+        
+        // Check if the uploadedVideosGrid element exists
+        if (!videosGrid) {
+            console.error('Uploaded videos grid element not found');
+            return;
+        }
         
         if (!this.uploadedVideos || this.uploadedVideos.length === 0) {
             videosGrid.innerHTML = '<div class="col-12"><p class="text-muted text-center">No uploaded videos yet</p></div>';
@@ -627,18 +682,40 @@ class VideoAnalysisApp {
 
     playUploadedVideo(filename) {
         const videoPlayer = document.getElementById('videoPlayer');
+        const videoModal = document.getElementById('videoModal');
+        
+        // Reset video player
+        videoPlayer.pause();
+        videoPlayer.currentTime = 0;
         videoPlayer.src = `/api/uploaded-video/${filename}`;
         
-        const videoModal = new bootstrap.Modal(document.getElementById('videoModal'));
-        videoModal.show();
+        // Show modal with proper accessibility
+        const modal = new bootstrap.Modal(videoModal);
+        modal.show();
+        
+        // Handle video loading errors
+        videoPlayer.addEventListener('error', () => {
+            this.showNotification('Error loading video. Please try again.', 'error');
+        });
     }
 
     playProcessedVideo(filename) {
         const videoPlayer = document.getElementById('videoPlayer');
+        const videoModal = document.getElementById('videoModal');
+        
+        // Reset video player
+        videoPlayer.pause();
+        videoPlayer.currentTime = 0;
         videoPlayer.src = `/api/processed-video/${filename}`;
         
-        const videoModal = new bootstrap.Modal(document.getElementById('videoModal'));
-        videoModal.show();
+        // Show modal with proper accessibility
+        const modal = new bootstrap.Modal(videoModal);
+        modal.show();
+        
+        // Handle video loading errors
+        videoPlayer.addEventListener('error', () => {
+            this.showNotification('Error loading processed video. Please try again.', 'error');
+        });
     }
 
     async deleteUploadedVideo(videoId) {
@@ -717,7 +794,10 @@ class VideoAnalysisApp {
         // Refresh data every 30 seconds
         setInterval(() => {
             this.loadCameras();
-            this.loadVideos();
+            // Only load videos if the videosGrid element exists
+            if (document.getElementById('videosGrid')) {
+                this.loadVideos();
+            }
         }, 30000);
         
         // Refresh camera previews every 10 seconds
@@ -840,6 +920,44 @@ window.addEventListener('online', () => {
     if (app) {
         app.showNotification('Network connection restored', 'success');
         app.loadCameras();
-        app.loadVideos();
+        // Only load videos if the videosGrid element exists
+        if (document.getElementById('videosGrid')) {
+            app.loadVideos();
+        }
+        app.loadUploadedVideos();
+    }
+});
+
+// Inert attribute polyfill for older browsers
+if (!HTMLElement.prototype.hasOwnProperty('inert')) {
+    Object.defineProperty(HTMLElement.prototype, 'inert', {
+        get() {
+            return this.hasAttribute('inert');
+        },
+        set(value) {
+            if (value) {
+                this.setAttribute('inert', '');
+                this.setAttribute('tabindex', '-1');
+                this.setAttribute('aria-hidden', 'true');
+            } else {
+                this.removeAttribute('inert');
+                this.removeAttribute('tabindex');
+                this.removeAttribute('aria-hidden');
+            }
+        }
+    });
+}
+
+// Additional accessibility improvements
+document.addEventListener('keydown', (event) => {
+    // Escape key handling for modals
+    if (event.key === 'Escape') {
+        const openModal = document.querySelector('.modal.show');
+        if (openModal) {
+            const modalInstance = bootstrap.Modal.getInstance(openModal);
+            if (modalInstance) {
+                modalInstance.hide();
+            }
+        }
     }
 }); 

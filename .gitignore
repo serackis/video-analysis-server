@@ -42,6 +42,40 @@ static/videos/
 static/processed/
 static/thumbnails/
 
+# Video file formats (ignore all video files in the repository)
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.wmv
+*.flv
+*.webm
+*.m4v
+*.3gp
+*.ogv
+*.ts
+*.mts
+*.m2ts
+
+# Video processing files
+*.mp4.tmp
+*.avi.tmp
+*.mov.tmp
+*.mkv.tmp
+
+# Uploaded videos (ignore all uploaded video files)
+uploads/
+**/uploads/
+**/uploaded_videos/
+**/processed_videos/
+
+# Video thumbnails and metadata
+*.jpg
+*.jpeg
+*.png
+!sample_*.jpg
+!test_*.jpg
+
 # Logs
 logs/
 *.log
