@@ -9,6 +9,8 @@ class VideoAnalysisApp {
         this.isBootstrapLoaded = false;
         this.retryCount = 0;
         this.maxRetries = 3;
+        this.isUploading = false;
+        this.isProcessing = false;
         this.init();
     }
 
@@ -71,66 +73,100 @@ class VideoAnalysisApp {
     }
 
     bindEvents() {
-        // Camera form submission
-        document.getElementById('cameraForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.addCamera();
-        });
+        // Camera form submission - only if element exists
+        const cameraForm = document.getElementById('cameraForm');
+        if (cameraForm) {
+            cameraForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.addCamera();
+            });
+        }
 
-        // Video modal events
+        // Video modal events - only if element exists
         const videoModal = document.getElementById('videoModal');
-        
-        // Store the element that had focus before modal opened
-        let previousActiveElement = null;
-        
-        videoModal.addEventListener('show.bs.modal', () => {
-            // Store the currently focused element
-            previousActiveElement = document.activeElement;
+        if (videoModal) {
+            // Store the element that had focus before modal opened
+            let previousActiveElement = null;
             
-            // Remove any aria-hidden attributes that Bootstrap might add
-            videoModal.removeAttribute('aria-hidden');
+            videoModal.addEventListener('show.bs.modal', () => {
+                // Store the currently focused element
+                previousActiveElement = document.activeElement;
+                
+                // Remove any aria-hidden attributes that Bootstrap might add
+                videoModal.removeAttribute('aria-hidden');
+                
+                // Use inert attribute instead of aria-hidden for better accessibility
+                videoModal.removeAttribute('inert');
+            });
             
-            // Use inert attribute instead of aria-hidden for better accessibility
-            videoModal.removeAttribute('inert');
-        });
-        
-        videoModal.addEventListener('shown.bs.modal', () => {
-            // Focus the video player when modal is fully shown
-            const videoPlayer = document.getElementById('videoPlayer');
-            if (videoPlayer) {
-                videoPlayer.focus();
-            }
-        });
-        
-        videoModal.addEventListener('hide.bs.modal', () => {
-            // Use inert attribute to prevent focus while hiding
-            videoModal.setAttribute('inert', '');
-        });
-        
-        videoModal.addEventListener('hidden.bs.modal', () => {
-            const videoPlayer = document.getElementById('videoPlayer');
-            videoPlayer.pause();
-            videoPlayer.src = '';
-            videoPlayer.currentTime = 0;
+            videoModal.addEventListener('shown.bs.modal', () => {
+                // Focus the video player when modal is fully shown
+                const videoPlayer = document.getElementById('videoPlayer');
+                if (videoPlayer) {
+                    videoPlayer.focus();
+                }
+            });
             
-            // Remove inert attribute
-            videoModal.removeAttribute('inert');
+            videoModal.addEventListener('hide.bs.modal', () => {
+                // Use inert attribute to prevent focus while hiding
+                videoModal.setAttribute('inert', '');
+            });
             
-            // Restore focus to the previous element
-            if (previousActiveElement && previousActiveElement.focus) {
-                previousActiveElement.focus();
-            }
-        });
+            videoModal.addEventListener('hidden.bs.modal', () => {
+                const videoPlayer = document.getElementById('videoPlayer');
+                if (videoPlayer) {
+                    videoPlayer.pause();
+                    videoPlayer.src = '';
+                    videoPlayer.currentTime = 0;
+                }
+                
+                // Remove inert attribute
+                videoModal.removeAttribute('inert');
+                
+                // Restore focus to the previous element
+                if (previousActiveElement && previousActiveElement.focus) {
+                    previousActiveElement.focus();
+                }
+            });
+        }
+
+        // Video upload form - only if element exists
+        const videoUploadForm = document.getElementById('videoUploadForm');
+        if (videoUploadForm) {
+            videoUploadForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.handleVideoUpload();
+            });
+        }
+
+        // Process Video button - only if element exists
+        const processVideoBtn = document.getElementById('processVideoBtn');
+        if (processVideoBtn) {
+            processVideoBtn.addEventListener('click', () => {
+                this.processVideo();
+            });
+        }
     }
 
     async loadCameras() {
+        // Don't load cameras on the library page - it doesn't need camera data
+        if (window.location.pathname === '/library') {
+            console.log('Skipping cameras load on library page - not needed');
+            return;
+        }
+        
         try {
             const response = await fetch('/api/cameras');
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             this.cameras = await response.json();
-            this.renderCameras();
+            
+            // Only render cameras if we're on a page that needs them
+            if (document.getElementById('camerasList')) {
+                this.renderCameras();
+            }
+            
             this.retryCount = 0; // Reset retry count on success
         } catch (error) {
             console.error('Error loading cameras:', error);
@@ -145,7 +181,11 @@ class VideoAnalysisApp {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             this.videos = await response.json();
-            this.renderVideos();
+            
+            // Only render videos if we're on a page that needs them
+            if (document.getElementById('videosGrid')) {
+                this.renderVideos();
+            }
         } catch (error) {
             console.error('Error loading videos:', error);
             this.handleApiError('videos', error);
@@ -153,6 +193,12 @@ class VideoAnalysisApp {
     }
 
     async loadUploadedVideos() {
+        // Don't load uploaded videos on the library page - it has its own loading logic
+        if (window.location.pathname === '/library') {
+            console.log('Skipping uploaded videos load on library page - using page-specific logic');
+            return;
+        }
+        
         try {
             const response = await fetch('/api/uploaded-videos');
             if (!response.ok) {
@@ -160,7 +206,11 @@ class VideoAnalysisApp {
             }
             const videos = await response.json();
             this.uploadedVideos = videos;
-            this.renderUploadedVideos();
+            
+            // Only render uploaded videos if we're on a page that needs them
+            if (document.getElementById('uploadedVideosGrid')) {
+                this.renderUploadedVideos();
+            }
         } catch (error) {
             console.error('Error loading uploaded videos:', error);
             this.handleApiError('uploaded-videos', error);
@@ -232,6 +282,11 @@ class VideoAnalysisApp {
     renderCameras() {
         const camerasList = document.getElementById('camerasList');
         
+        // Only render if the element exists (safety check for different pages)
+        if (!camerasList) {
+            return;
+        }
+        
         if (this.cameras.length === 0) {
             camerasList.innerHTML = '<p class="text-muted text-center">No cameras configured</p>';
             return;
@@ -275,10 +330,19 @@ class VideoAnalysisApp {
     }
 
     showCameraPreviewModal(cameraData) {
-        const modal = new bootstrap.Modal(document.getElementById('cameraPreviewModal'));
+        const modalElement = document.getElementById('cameraPreviewModal');
         const videoElement = document.getElementById('cameraStream');
         const statusElement = document.getElementById('streamStatus');
         const infoElement = document.getElementById('cameraInfo');
+        
+        // Safety check - only proceed if required elements exist
+        if (!modalElement || !videoElement || !statusElement || !infoElement) {
+            console.log('Camera preview modal elements not found on this page');
+            this.showNotification('Camera preview not available on this page', 'warning');
+            return;
+        }
+        
+        const modal = new bootstrap.Modal(modalElement);
         
         // Update camera info
         infoElement.innerHTML = `
@@ -300,23 +364,29 @@ class VideoAnalysisApp {
         videoElement.src = cameraData.rtsp_url;
         
         videoElement.onloadstart = () => {
-            statusElement.innerHTML = `
-                <div class="spinner-border spinner-border-sm" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </div>
-                <span>Loading stream...</span>
-            `;
+            if (statusElement) {
+                statusElement.innerHTML = `
+                    <div class="spinner-border spinner-border-sm" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span>Loading stream...</span>
+                `;
+            }
         };
         
         videoElement.oncanplay = () => {
-            statusElement.style.display = 'none';
+            if (statusElement) {
+                statusElement.style.display = 'none';
+            }
         };
         
         videoElement.onerror = () => {
-            statusElement.innerHTML = `
-                <i class="fas fa-exclamation-triangle text-warning"></i>
-                <span>Failed to load stream. Trying snapshot...</span>
-            `;
+            if (statusElement) {
+                statusElement.innerHTML = `
+                    <i class="fas fa-exclamation-triangle text-warning"></i>
+                    <span>Failed to load stream. Trying snapshot...</span>
+                `;
+            }
             this.loadCameraSnapshot(cameraData.camera_id);
         };
         
@@ -333,6 +403,12 @@ class VideoAnalysisApp {
                 const blob = await response.blob();
                 const videoElement = document.getElementById('cameraStream');
                 const statusElement = document.getElementById('streamStatus');
+                
+                // Safety check - only proceed if required elements exist
+                if (!videoElement || !statusElement) {
+                    console.log('Camera snapshot elements not found on this page');
+                    return;
+                }
                 
                 // Create an image element to show the snapshot
                 const img = document.createElement('img');
@@ -360,9 +436,17 @@ class VideoAnalysisApp {
         const snapshotBtn = document.getElementById('captureSnapshot');
         const recordingBtn = document.getElementById('toggleRecording');
         
+        // Safety check - only proceed if required elements exist
+        if (!refreshBtn || !snapshotBtn || !recordingBtn) {
+            console.log('Camera control buttons not found on this page');
+            return;
+        }
+        
         refreshBtn.onclick = () => {
             const videoElement = document.getElementById('cameraStream');
-            videoElement.src = videoElement.src; // Reload stream
+            if (videoElement) {
+                videoElement.src = videoElement.src; // Reload stream
+            }
         };
         
         snapshotBtn.onclick = () => {
@@ -468,47 +552,103 @@ class VideoAnalysisApp {
         const videoDetails = document.getElementById('videoDetails');
         const fileInput = document.getElementById('videoFile');
         
+        // Safety check - only proceed if required elements exist
+        if (!videoInfo || !videoDetails) {
+            console.log('Video info elements not found on this page');
+            return;
+        }
+        
         videoDetails.innerHTML = `
             <div class="row">
                 <div class="col-6">
-                    <strong>Duration:</strong> ${videoData.duration.toFixed(2)}s<br>
-                    <strong>FPS:</strong> ${videoData.fps.toFixed(2)}<br>
-                    <strong>Frames:</strong> ${videoData.frame_count}
+                    <strong>Duration:</strong> ${videoData.duration?.toFixed(2) || 'Unknown'}s<br>
+                    <strong>FPS:</strong> ${videoData.fps?.toFixed(2) || 'Unknown'}<br>
+                    <strong>Frames:</strong> ${videoData.frame_count || 'Unknown'}
                 </div>
                 <div class="col-6">
-                    <strong>Resolution:</strong> ${videoData.width}x${videoData.height}<br>
-                    <strong>File:</strong> ${videoData.original_filename}<br>
-                    <strong>Size:</strong> ${(videoData.file_size / 1024 / 1024).toFixed(2)} MB
+                    <strong>Resolution:</strong> ${videoData.width || 0}x${videoData.height || 0}<br>
+                    <strong>File:</strong> ${videoData.original_filename || 'Unknown'}<br>
+                    <strong>Size:</strong> ${videoData.file_size ? (videoData.file_size / 1024 / 1024).toFixed(2) : 'Unknown'} MB
                 </div>
             </div>
         `;
         
         videoInfo.style.display = 'block';
         
-        // Show original video
+        // Show original video if elements exist
         const originalVideo = document.getElementById('originalVideo');
-        originalVideo.src = `/api/uploaded-video/${videoData.filename}`;
-        document.getElementById('videoPlayerSection').style.display = 'block';
+        const videoPlayerSection = document.getElementById('videoPlayerSection');
+        
+        if (originalVideo && videoPlayerSection) {
+            originalVideo.src = `/api/uploaded-video/${videoData.filename}`;
+            videoPlayerSection.style.display = 'block';
+        }
     }
 
     async processVideo() {
-        if (!this.currentVideo) {
-            this.showNotification('Please upload a video first', 'error');
+        // Prevent duplicate submissions
+        if (this.isProcessing) {
+            console.log('Processing already in progress, ignoring duplicate request');
             return;
         }
         
-        const enableDepersonalization = document.getElementById('enableDepersonalization').checked;
+        this.isProcessing = true;
         
-        // Show progress
-        const progressSection = document.getElementById('processingProgress');
-        const progressBar = progressSection.querySelector('.progress-bar');
+        if (!this.currentVideo) {
+            this.showNotification('Please upload a video first', 'error');
+            this.isProcessing = false;
+            return;
+        }
+        
+        const enableDepersonalization = document.getElementById('enableDepersonalization');
+        if (!enableDepersonalization) {
+            console.log('Depersonalization checkbox not found on this page');
+            return;
+        }
+        
+        // Show progress section
+        const processingProgressRow = document.getElementById('processingProgressRow');
+        if (processingProgressRow) {
+            processingProgressRow.style.display = 'block';
+            console.log('Progress section shown');
+        } else {
+            console.error('Progress section not found!');
+        }
+        
+        // Show progress - using correct element IDs from HTML template
+        const progressBar = document.querySelector('#processingProgressRow .progress-bar');
+        const progressText = document.getElementById('progressText');
         const statusText = document.getElementById('processingStatus');
         
-        progressSection.style.display = 'block';
+        // Safety check for progress elements
+        if (!progressBar || !progressText || !statusText) {
+            console.log('Progress elements not found on this page');
+            console.log('Missing elements:', { progressBar, progressText, statusText });
+            this.showNotification('Progress display not available', 'warning');
+            return;
+        }
+        
+        console.log('Progress elements found successfully');
+        console.log('Elements:', { progressBar, progressText, statusText });
+        
+        // Update progress display with proper attributes
         progressBar.style.width = '0%';
+        progressBar.setAttribute('aria-valuenow', 0);
+        progressText.textContent = '0%';
         statusText.textContent = 'Starting video processing...';
         
+        console.log('Initial progress display set');
+        
         try {
+            // Update button to show loading state
+            const processBtn = document.getElementById('processVideoBtn');
+            if (processBtn) {
+                const originalText = processBtn.innerHTML;
+                processBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+                processBtn.disabled = true;
+            }
+            
+            // Start processing
             const response = await fetch('/api/process-video', {
                 method: 'POST',
                 headers: {
@@ -516,35 +656,134 @@ class VideoAnalysisApp {
                 },
                 body: JSON.stringify({
                     filename: this.currentVideo.filename,
-                    depersonalize: enableDepersonalization
+                    depersonalize: enableDepersonalization.checked
                 })
             });
             
-            const data = await response.json();
-            
-            if (response.ok) {
-                progressBar.style.width = '100%';
-                statusText.textContent = 'Processing completed!';
-                
-                // Show processed video
-                const processedVideo = document.getElementById('processedVideo');
-                processedVideo.src = `/api/processed-video/${data.processed_filename}`;
-                
-                this.showNotification('Video processed successfully!', 'success');
-                
-                // Hide progress after a delay
-                setTimeout(() => {
-                    progressSection.style.display = 'none';
-                }, 3000);
-            } else {
-                statusText.textContent = data.error || 'Processing failed';
-                this.showNotification(data.error || 'Processing failed', 'error');
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Processing failed');
             }
+            
+            const data = await response.json();
+            console.log('Process video response:', data);
+            
+            // Start progress polling
+            console.log('Starting progress polling with filename:', data.processed_filename);
+            this.startProgressPolling(data.processed_filename, progressBar, progressText, statusText, processingProgressRow);
+            
         } catch (error) {
             console.error('Processing error:', error);
-            statusText.textContent = 'Processing failed';
+            if (statusText) {
+                statusText.textContent = 'Processing failed';
+            }
             this.showNotification('Processing failed', 'error');
+        } finally {
+            // Reset processing flag
+            this.isProcessing = false;
+            
+            // Restore button state
+            const processBtn = document.getElementById('processVideoBtn');
+            if (processBtn) {
+                processBtn.innerHTML = '<i class="fas fa-cogs me-2"></i>Process Video';
+                processBtn.disabled = false;
+            }
         }
+    }
+
+    startProgressPolling(processedFilename, progressBar, progressText, statusText, processingProgressRow) {
+        console.log('Starting progress polling for:', processedFilename);
+        console.log('Progress elements:', { progressBar, progressText, statusText, processingProgressRow });
+        
+        let progress = 0;
+        let lastProgress = 0;
+        const pollInterval = setInterval(async () => {
+            try {
+                // Simulate realistic progress updates
+                if (progress < 90) {
+                    // Gradual progress increase
+                    progress += Math.random() * 8 + 2; // 2-10% increase per second
+                    if (progress > 90) progress = 90; // Cap at 90% until completion
+                }
+                
+                console.log(`Progress update: ${Math.round(progress)}%`);
+                
+                // Update progress bar with proper attributes
+                progressBar.style.width = `${progress}%`;
+                progressBar.setAttribute('aria-valuenow', Math.round(progress));
+                progressText.textContent = `${Math.round(progress)}%`;
+                
+                // Debug: Check if the DOM is actually updated
+                console.log('Progress bar width set to:', progressBar.style.width);
+                console.log('Progress text set to:', progressText.textContent);
+                console.log('Progress bar element:', progressBar);
+                
+                // Update status text based on progress
+                if (progress < 20) {
+                    statusText.textContent = 'Initializing video processing...';
+                } else if (progress < 40) {
+                    statusText.textContent = 'Analyzing video content and detecting faces...';
+                } else if (progress < 60) {
+                    statusText.textContent = 'Processing license plates and objects...';
+                } else if (progress < 80) {
+                    statusText.textContent = 'Applying privacy protection and blurring...';
+                } else if (progress < 90) {
+                    statusText.textContent = 'Finalizing video encoding...';
+                }
+                
+                // Check if processing is actually complete by trying to access the processed video
+                try {
+                    const checkResponse = await fetch(`/api/processed-video/${processedFilename}`);
+                    if (checkResponse.ok) {
+                        // Processing is complete
+                        clearInterval(pollInterval);
+                        
+                        progressBar.style.width = '100%';
+                        progressBar.setAttribute('aria-valuenow', 100);
+                        progressText.textContent = '100%';
+                        statusText.textContent = 'Processing completed successfully!';
+                        
+                        // Show processed video if elements exist
+                        const processedVideo = document.getElementById('processedVideo');
+                        if (processedVideo) {
+                            processedVideo.src = `/api/processed-video/${processedFilename}`;
+                        }
+                        
+                        this.showNotification('Video processed successfully!', 'success');
+                        
+                        // Hide progress after a delay
+                        setTimeout(() => {
+                            if (processingProgressRow) {
+                                processingProgressRow.style.display = 'none';
+                            }
+                        }, 3000);
+                        
+                        return;
+                    }
+                } catch (checkError) {
+                    // File not ready yet, continue polling
+                }
+                
+                // If progress hasn't changed for a while, show "stuck" message
+                if (Math.abs(progress - lastProgress) < 1) {
+                    statusText.textContent = 'Processing in progress... Please wait';
+                }
+                lastProgress = progress;
+                
+            } catch (error) {
+                console.error('Progress polling error:', error);
+                clearInterval(pollInterval);
+            }
+        }, 800); // Poll every 800ms for smoother updates
+        
+        // Set a maximum polling time (10 minutes)
+        setTimeout(() => {
+            clearInterval(pollInterval);
+            if (progress < 100) {
+                statusText.textContent = 'Processing timeout - check server logs';
+                this.showNotification('Processing timeout - check server logs', 'warning');
+            }
+        }, 600000); // 10 minutes
     }
 
     renderVideos() {
@@ -767,7 +1006,9 @@ class VideoAnalysisApp {
 
     showLoading(show) {
         const spinner = document.getElementById('loadingSpinner');
-        spinner.style.display = show ? 'flex' : 'none';
+        if (spinner) {
+            spinner.style.display = show ? 'flex' : 'none';
+        }
     }
 
     showNotification(message, type = 'info') {
@@ -893,6 +1134,191 @@ class VideoAnalysisApp {
             `;
         }
     }
+
+    async handleVideoUpload() {
+        // Prevent duplicate submissions
+        if (this.isUploading) {
+            console.log('Upload already in progress, ignoring duplicate request');
+            return;
+        }
+        
+        this.isUploading = true;
+        
+        const fileInput = document.getElementById('videoFile');
+        const file = fileInput.files[0];
+        
+        if (!file) {
+            this.showNotification('Please select a video file', 'warning');
+            this.isUploading = false;
+            return;
+        }
+
+        // Validate file type
+        const allowedTypes = ['video/mp4', 'video/avi', 'video/mov', 'video/mkv', 'video/webm'];
+        if (!allowedTypes.includes(file.type)) {
+            this.showNotification('Please select a valid video file (MP4, AVI, MOV, MKV, WEBM)', 'warning');
+            return;
+        }
+
+        // No file size limit - allow any size video
+        console.log(`Uploading video: ${file.name} (${this.formatFileSize(file.size)})`);
+
+        try {
+            this.showNotification('Uploading video...', 'info');
+            
+            // Update button to show loading state
+            const uploadBtn = document.querySelector('#videoUploadForm button[type="submit"]');
+            if (uploadBtn) {
+                const originalText = uploadBtn.innerHTML;
+                uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Uploading...';
+                uploadBtn.disabled = true;
+            }
+            
+            const formData = new FormData();
+            formData.append('video', file);
+
+            const response = await fetch('/api/upload-video', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showNotification('Video uploaded successfully!', 'success');
+                fileInput.value = ''; // Clear the input
+                
+                // Store the uploaded video data for processing
+                if (result.video_info) {
+                    this.currentVideo = result.video_info;
+                    this.displayVideoInfo(result.video_info);
+                }
+                
+                // Show processing controls
+                this.showProcessingControls();
+                
+                // Refresh the uploaded videos list
+                await this.loadUploadedVideos();
+            } else {
+                this.showNotification(result.error || 'Upload failed', 'error');
+            }
+        } catch (error) {
+            console.error('Video upload error:', error);
+            this.showNotification(`Upload failed: ${error.message}`, 'error');
+        } finally {
+            // Reset upload flag
+            this.isUploading = false;
+            
+            // Restore button state
+            const uploadBtn = document.querySelector('#videoUploadForm button[type="submit"]');
+            if (uploadBtn) {
+                uploadBtn.innerHTML = '<i class="fas fa-upload me-2"></i>Upload Video';
+                uploadBtn.disabled = false;
+            }
+        }
+    }
+
+    showProcessingControls() {
+        const processingControls = document.getElementById('processingControls');
+        const processingPlaceholder = document.getElementById('processingPlaceholder');
+        
+        if (processingControls && processingPlaceholder) {
+            processingPlaceholder.style.display = 'none';
+            processingControls.style.display = 'block';
+        }
+    }
+
+    // Test method to manually test progress bar
+    testProgressBar() {
+        console.log('Testing progress bar...');
+        
+        const processingProgressRow = document.getElementById('processingProgressRow');
+        const progressBar = document.querySelector('#processingProgressRow .progress-bar');
+        const progressText = document.getElementById('progressText');
+        const statusText = document.getElementById('processingStatus');
+        
+        console.log('Test - Found elements:', { processingProgressRow, progressBar, progressText, statusText });
+        
+        if (processingProgressRow) {
+            processingProgressRow.style.display = 'block';
+        }
+        
+        if (progressBar && progressText && statusText) {
+            let progress = 0;
+            const testInterval = setInterval(() => {
+                progress += 10;
+                progressBar.style.width = `${progress}%`;
+                progressText.textContent = `${progress}%`;
+                statusText.textContent = `Testing progress: ${progress}%`;
+                
+                console.log(`Test progress: ${progress}%`);
+                
+                if (progress >= 100) {
+                    clearInterval(testInterval);
+                    statusText.textContent = 'Test completed!';
+                }
+            }, 500);
+        } else {
+            console.error('Test failed - missing elements');
+        }
+    }
+
+    displayVideoInfo(videoInfo) {
+        console.log('Displaying video info:', videoInfo);
+        
+        const videoInfoCard = document.getElementById('videoInfoCard');
+        if (!videoInfoCard) {
+            console.log('Video info card not found on this page');
+            return;
+        }
+        
+        const infoContent = videoInfoCard.querySelector('.card-body');
+        if (infoContent) {
+            infoContent.innerHTML = `
+                <div class="row">
+                    <div class="col-6">
+                        <strong>Filename:</strong><br>
+                        <span class="text-muted">${videoInfo.filename || 'Unknown'}</span>
+                    </div>
+                    <div class="col-6">
+                        <strong>Size:</strong><br>
+                        <span class="text-muted">${this.formatFileSize(videoInfo.size || 0)}</span>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-6">
+                        <strong>Duration:</strong><br>
+                        <span class="text-muted">${this.formatDuration(videoInfo.duration || 0)}</span>
+                    </div>
+                    <div class="col-6">
+                        <strong>Resolution:</strong><br>
+                        <span class="text-muted">${videoInfo.width || 0} x ${videoInfo.height || 0}</span>
+                    </div>
+                </div>
+            `;
+            videoInfoCard.style.display = 'block';
+            console.log('Video info card displayed successfully');
+        }
+    }
+
+    formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    formatDuration(seconds) {
+        if (seconds === 0) return '0:00';
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = Math.floor(seconds % 60);
+        return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    }
 }
 
 // Initialize the application when the page loads
@@ -919,12 +1345,17 @@ window.addEventListener('offline', () => {
 window.addEventListener('online', () => {
     if (app) {
         app.showNotification('Network connection restored', 'success');
-        app.loadCameras();
-        // Only load videos if the videosGrid element exists
-        if (document.getElementById('videosGrid')) {
+        
+        // Only load data if we're on pages that need it
+        if (document.getElementById('camerasList') && window.location.pathname !== '/library') {
+            app.loadCameras();
+        }
+        if (document.getElementById('videosGrid') && window.location.pathname !== '/library') {
             app.loadVideos();
         }
-        app.loadUploadedVideos();
+        if (document.getElementById('uploadedVideosGrid') && window.location.pathname !== '/library') {
+            app.loadUploadedVideos();
+        }
     }
 });
 
@@ -960,4 +1391,4 @@ document.addEventListener('keydown', (event) => {
             }
         }
     }
-}); 
+});

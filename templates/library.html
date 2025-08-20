@@ -203,6 +203,8 @@
 
         // Initialize library when page loads
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('Library page DOM loaded');
+            
             // Bind video type selection
             document.querySelectorAll('input[name="videoType"]').forEach(radio => {
                 radio.addEventListener('change', function() {
@@ -211,23 +213,76 @@
                 });
             });
 
-            // Load video library
+            // Load video library only once
             loadVideoLibrary();
         });
 
-        // Load video library data
+        // Load video library data with loading protection
+        let isLoading = false;
         async function loadVideoLibrary() {
+            // Prevent multiple simultaneous loads
+            if (isLoading) {
+                console.log('Library already loading, skipping duplicate request');
+                return;
+            }
+            
+            isLoading = true;
             try {
+                console.log('Loading video library...');
+                
+                // Add cache-busting parameter to prevent stale data
+                const timestamp = new Date().getTime();
+                
                 // Load uploaded videos
-                const uploadedResponse = await fetch('/api/uploaded-videos');
+                const uploadedResponse = await fetch(`/api/uploaded-videos?t=${timestamp}`);
+                if (!uploadedResponse.ok) {
+                    throw new Error(`Failed to load uploaded videos: ${uploadedResponse.status}`);
+                }
                 uploadedVideos = await uploadedResponse.json();
+                console.log('Uploaded videos loaded:', uploadedVideos.length);
 
                 // Load processed videos
-                const processedResponse = await fetch('/api/processed-videos');
+                const processedResponse = await fetch(`/api/processed-videos?t=${timestamp}`);
+                if (!processedResponse.ok) {
+                    throw new Error(`Failed to load processed videos: ${processedResponse.status}`);
+                }
                 processedVideos = await processedResponse.json();
+                console.log('Processed videos loaded:', processedVideos.length);
 
-                // Combine all videos
-                allVideos = [...uploadedVideos, ...processedVideos];
+                // Filter out any videos with null/undefined IDs (deleted videos)
+                uploadedVideos = uploadedVideos.filter(video => video && video.id && video.id !== null);
+                processedVideos = processedVideos.filter(video => video && video.id && video.id !== null);
+
+                // Additional validation: check if videos have valid data
+                uploadedVideos = uploadedVideos.filter(video => 
+                    video.original_filename && 
+                    video.stored_filename && 
+                    video.uploaded_at
+                );
+                processedVideos = processedVideos.filter(video => 
+                    video.filename && 
+                    video.processed_at
+                );
+
+                // Combine all videos, ensuring no duplicates
+                const videoMap = new Map();
+                
+                // Add uploaded videos
+                uploadedVideos.forEach(video => {
+                    if (video.id) {
+                        videoMap.set(video.id, { ...video, type: 'uploaded' });
+                    }
+                });
+                
+                // Add processed videos (these might have different IDs)
+                processedVideos.forEach(video => {
+                    if (video.id) {
+                        videoMap.set(video.id, { ...video, type: 'processed' });
+                    }
+                });
+
+                allVideos = Array.from(videoMap.values());
+                console.log('Total unique videos after filtering:', allVideos.length);
 
                 // Update statistics
                 updateLibraryStats();
@@ -237,6 +292,9 @@
             } catch (error) {
                 console.error('Error loading video library:', error);
                 document.getElementById('videoLibrary').innerHTML = '<p class="text-danger text-center">Error loading video library</p>';
+            } finally {
+                // Reset loading flag
+                isLoading = false;
             }
         }
 
@@ -411,6 +469,8 @@
             }
 
             try {
+                console.log(`Deleting ${type} video with ID:`, videoId);
+                
                 const endpoint = type === 'processed' ? `/api/processed-videos/${videoId}` : `/api/uploaded-videos/${videoId}`;
                 const response = await fetch(endpoint, {
                     method: 'DELETE'
@@ -419,13 +479,22 @@
                 const result = await response.json();
 
                 if (result.success) {
-                    // Reload library
-                    loadVideoLibrary();
+                    console.log('Video deleted successfully, reloading library...');
+                    
+                    // Clear current data to prevent stale display
+                    allVideos = [];
+                    uploadedVideos = [];
+                    processedVideos = [];
+                    
+                    // Reload library with fresh data
+                    await loadVideoLibrary();
+                    
                     // Show success message
                     if (window.app) {
                         window.app.showNotification('Video deleted successfully!', 'success');
                     }
                 } else {
+                    console.error('Failed to delete video:', result);
                     if (window.app) {
                         window.app.showNotification('Failed to delete video', 'error');
                     }
@@ -438,9 +507,25 @@
             }
         }
 
-        // Refresh library
+        // Refresh library with debouncing
+        let refreshTimeout = null;
         function refreshLibrary() {
-            loadVideoLibrary();
+            console.log('Manual refresh requested');
+            
+            // Clear any pending refresh
+            if (refreshTimeout) {
+                clearTimeout(refreshTimeout);
+            }
+            
+            // Debounce refresh to prevent multiple rapid calls
+            refreshTimeout = setTimeout(() => {
+                console.log('Executing debounced refresh');
+                // Clear current data to ensure fresh load
+                allVideos = [];
+                uploadedVideos = [];
+                processedVideos = [];
+                loadVideoLibrary();
+            }, 300); // 300ms debounce
         }
 
         // Clear all videos
@@ -474,11 +559,10 @@
             }
         }
 
-        // Global app reference
+        // Global app reference - only for notifications
         window.addEventListener('load', function() {
-            if (window.app) {
-                loadVideoLibrary();
-            }
+            console.log('Library page window loaded');
+            // Don't reload videos here - already loaded in DOMContentLoaded
         });
     </script>
 </body>

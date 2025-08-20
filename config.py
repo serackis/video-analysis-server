@@ -1,9 +1,19 @@
 """
 Configuration file for Video Analysis Server
+Cross-platform compatible with automatic GPU acceleration detection
 """
 
 import os
 from pathlib import Path
+
+# Import platform utilities for GPU detection
+try:
+    from platform_utils import is_gpu_available, get_gpu_acceleration_type
+    GPU_AVAILABLE = is_gpu_available()
+    GPU_ACCELERATION_TYPE = get_gpu_acceleration_type()
+except ImportError:
+    GPU_AVAILABLE = False
+    GPU_ACCELERATION_TYPE = "CPU"
 
 # Base directory
 BASE_DIR = Path(__file__).parent
@@ -65,9 +75,14 @@ class Config:
     LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
     LOG_FILE = os.environ.get('LOG_FILE') or str(BASE_DIR / 'logs' / 'app.log')
     
-    # Performance settings
-    ENABLE_GPU_ACCELERATION = os.environ.get('ENABLE_GPU_ACCELERATION', 'False').lower() == 'true'
+    # Performance settings - Auto-detect GPU acceleration
+    ENABLE_GPU_ACCELERATION = os.environ.get('ENABLE_GPU_ACCELERATION', str(GPU_AVAILABLE)).lower() == 'true'
+    GPU_ACCELERATION_TYPE = os.environ.get('GPU_ACCELERATION_TYPE', GPU_ACCELERATION_TYPE)
     MAX_CONCURRENT_STREAMS = int(os.environ.get('MAX_CONCURRENT_STREAMS', 5))
+    
+    # GPU-specific settings
+    CUDA_DEVICE_ID = int(os.environ.get('CUDA_DEVICE_ID', 0))  # Default CUDA device
+    MPS_DEVICE = os.environ.get('MPS_DEVICE', 'mps')  # Apple Metal device
     
     # Notification settings
     ENABLE_EMAIL_NOTIFICATIONS = os.environ.get('ENABLE_EMAIL_NOTIFICATIONS', 'False').lower() == 'true'
@@ -105,4 +120,12 @@ config = {
 def get_config():
     """Get configuration based on environment"""
     config_name = os.environ.get('FLASK_ENV', 'default')
-    return config.get(config_name, config['default']) 
+    return config.get(config_name, config['default'])
+
+def get_gpu_info():
+    """Get GPU acceleration information"""
+    return {
+        'available': GPU_AVAILABLE,
+        'type': GPU_ACCELERATION_TYPE,
+        'enabled': Config.ENABLE_GPU_ACCELERATION
+    } 

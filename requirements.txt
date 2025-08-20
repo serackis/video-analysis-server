@@ -1,14 +1,70 @@
+# Core Flask dependencies
 Flask==2.3.3
 Flask-CORS==4.0.0
-opencv-python==4.8.1.78
-opencv-contrib-python==4.8.1.78
-numpy==1.24.3
-Pillow==9.5.0
-requests==2.31.0
-python-dotenv==1.0.0
-SQLAlchemy==2.0.23
 Werkzeug==2.3.7
 gunicorn==21.2.0
+
+# Computer Vision and Image Processing
+# Cross-platform OpenCV with GPU support
+opencv-python==4.8.1.78
+opencv-contrib-python==4.8.1.78
+
+# Alternative OpenCV builds for different platforms
+# Uncomment the appropriate line for your system:
+# For Windows with CUDA support (if available):
+# opencv-python-cuda==4.8.1.78
+# For Mac with Metal support:
+# opencv-python-metal==4.8.1.78
+
+# Core scientific computing
+numpy==1.24.3
+Pillow==9.5.0
+
+# HTTP and networking
+requests==2.31.0
+
+# Environment and configuration
+python-dotenv==1.0.0
+
+# Database
+SQLAlchemy==2.0.23
+
+# Face recognition (works on both Mac and Windows)
 face-recognition==1.3.0
+
+# OCR for license plate detection
 easyocr==1.7.0
-imutils==0.5.4 
+
+# Image utilities
+imutils==0.5.4
+
+# GPU acceleration support
+# NVIDIA CUDA support (Windows/Linux)
+# Uncomment if you have NVIDIA GPU and CUDA installed:
+# torch==2.0.1+cu118 --index-url https://download.pytorch.org/whl/cu118
+# torchvision==0.15.2+cu118 --index-url https://download.pytorch.org/whl/cu118
+
+# Alternative PyTorch builds for different platforms
+# For Windows with CUDA:
+# torch==2.0.1+cu118 --index-url https://download.pytorch.org/whl/cu118
+# For Mac with MPS (Metal Performance Shaders):
+# torch==2.0.1
+# For Linux with CUDA:
+# torch==2.0.1+cu118 --index-url https://download.pytorch.org/whl/cu118
+
+# For CPU-only (fallback):
+torch==2.0.1
+torchvision==0.15.2
+
+# Additional GPU acceleration libraries
+# Uncomment for NVIDIA GPU support:
+# cupy-cuda11x==12.0.0  # Replace 11x with your CUDA version
+# nvidia-ml-py3==12.535.133
+
+# Platform-specific optimizations
+# For Windows:
+# pywin32==306; sys_platform == "win32"
+# For Mac:
+# pyobjc-framework-Cocoa==10.0; sys_platform == "darwin"
+# For Linux:
+# python-xlib==0.33; sys_platform == "linux" 

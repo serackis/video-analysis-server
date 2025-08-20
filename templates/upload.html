@@ -143,6 +143,10 @@
                             <button id="processVideoBtn" class="btn btn-success w-100">
                                 <i class="fas fa-cogs me-2"></i>Process Video
                             </button>
+                            
+                            <button id="testProgressBtn" class="btn btn-info w-100 mt-2" onclick="app.testProgressBar()">
+                                <i class="fas fa-test-tube me-2"></i>Test Progress Bar
+                            </button>
                         </div>
                         
                         <div id="processingPlaceholder" class="text-center text-muted">
@@ -165,8 +169,8 @@
                         </h5>
                     </div>
                     <div class="card-body">
-                        <div class="progress mb-3" style="height: 25px;">
-                            <div class="progress-bar" role="progressbar" style="width: 0%">
+                        <div class="progress mb-3" style="height: 25px; background-color: #e9ecef;">
+                            <div class="progress-bar" role="progressbar" style="width: 0%; min-width: 2em;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
                                 <span id="progressText">0%</span>
                             </div>
                         </div>
@@ -259,14 +263,9 @@
     <script>
         // Initialize upload page when loaded
         document.addEventListener('DOMContentLoaded', function() {
-            // Bind video upload form
-            document.getElementById('videoUploadForm').addEventListener('submit', function(e) {
-                e.preventDefault();
-                if (window.app) {
-                    window.app.uploadVideo();
-                }
-            });
-
+            // Note: Video upload form is handled by app.js bindEvents() method
+            // No need to duplicate the event listener here
+            
             // Load recent uploads
             if (window.app) {
                 loadRecentUploads();
